@@ -1,0 +1,6 @@
+// cli -- Tml.cli package のルート namespace
+//
+// このファイル自体は空の入れ口。実際の機能は各 submodule にある。
+//   module cli.args as args
+//   module cli.color as color
+//   module cli.progress as progress
