@@ -106,10 +106,12 @@ progress.finish(bar)
 不定長タスク向けのスピナー:
 
 ```myon
+module myon.time
+
 sp = progress.new_spinner("working")
 myon.for i myon.in range(0, 20) {
     progress.spin(sp)
-    myon.time.sleep(0.1)
+    myon.time.sleep_ms(100)
 }
 progress.spinner_finish(sp, "done!")
 ```
