@@ -122,7 +122,10 @@ myon.func new_spinner(label: str) ret Spinner {
     frames.push("|")
     frames.push("/")
     frames.push("-")
-    frames.push("\\")
+    // Myon の文字列リテラルはエスケープを解釈しないため "\\" は
+    // バックスラッシュ「2文字」になってしまう（cr()と同じ理由）。
+    // 1文字のバックスラッシュは char(92) から明示的に組み立てる。
+    frames.push(str(char(92)))
     ret Spinner(frames=frames, frame_index=0, label=label)
 }
 
