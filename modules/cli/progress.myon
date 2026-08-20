@@ -14,6 +14,11 @@
 
 module myon.stdio
 
+// Myon の文字列リテラルは "\r" のような C 風エスケープを解釈しない
+// （バックスラッシュと r の2文字として保持される）ため、
+// キャリッジリターンは char(13) から明示的に組み立てる。
+myon.func cr() ret str { ret str(char(13)) }
+
 myon.struct Bar {
     total: int
     width: int
@@ -68,7 +73,7 @@ myon.func update(bar: Bar, current: int) ret void {
     pct = percent_of(bar, current)
     myon.if myon.is_tty() then {
         line = render_line(bar, current)
-        myon.write("\r" + line)
+        myon.write(cr() + line)
         myon.flush()
         bar.last_pct = pct
         bar.started = true
@@ -85,7 +90,7 @@ myon.func update(bar: Bar, current: int) ret void {
 myon.func finish(bar: Bar) ret void {
     myon.if myon.is_tty() then {
         line = render_line(bar, bar.total)
-        myon.write("\r" + line)
+        myon.write(cr() + line)
         myon.println("")
         myon.flush()
     } myon.else {
@@ -128,7 +133,7 @@ myon.func spin(sp: Spinner) ret void {
     }
 
     myon.if myon.is_tty() then {
-        myon.write("\r" + prefix + frame)
+        myon.write(cr() + prefix + frame)
         myon.flush()
     }
 }
@@ -136,7 +141,7 @@ myon.func spin(sp: Spinner) ret void {
 // スピナーを終了し、最終メッセージを1行で確定する。
 myon.func spinner_finish(sp: Spinner, message: str) ret void {
     myon.if myon.is_tty() then {
-        myon.write("\r")
+        myon.write(cr())
     }
     myon.println(message)
 }
