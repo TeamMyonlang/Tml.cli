@@ -19,14 +19,12 @@ module myon.stdio
 // キャリッジリターンは char(13) から明示的に組み立てる。
 myon.func cr() ret str { ret str(char(13)) }
 
-// 端末の1行を確実に上書きするためのパディング幅。
-// 直前に描画した行より短い行を \r だけで上書きすると、
-// 前の行の末尾がそのまま残って表示が乱れる（例: バーの後にスピナーを
-// 描画すると起こりやすい）ため、末尾をスペースで埋めてから \r で
-// カーソルを戻す。
-myon.func clear_pad() ret str {
-    pad, perr = myon.string.repeat(" ", 40)
-    ret pad + cr()
+// ANSI "erase to end of line"（ESC [ K）。カーソル位置から行末までを
+// 消去する。スペースでパディングして上書きする方式は、パディング分の
+// 文字がそのまま画面に残ってしまう／端末幅で折り返される等の副作用が
+// あるため、こちらの方式に統一する。
+myon.func clear_to_eol() ret str {
+    ret str(char(27)) + "[K"
 }
 
 myon.struct Bar {
@@ -83,7 +81,7 @@ myon.func update(bar: Bar, current: int) ret void {
     pct = percent_of(bar, current)
     myon.if myon.is_tty() then {
         line = render_line(bar, current)
-        myon.write(cr() + line + clear_pad())
+        myon.write(cr() + clear_to_eol() + line)
         myon.flush()
         bar.last_pct = pct
         bar.started = true
@@ -100,9 +98,7 @@ myon.func update(bar: Bar, current: int) ret void {
 myon.func finish(bar: Bar) ret void {
     myon.if myon.is_tty() then {
         line = render_line(bar, bar.total)
-        pad, perr = myon.string.repeat(" ", 40)
-        myon.write(cr() + line + pad)
-        myon.write(cr() + line)
+        myon.write(cr() + clear_to_eol() + line)
         myon.println("")
         myon.flush()
     } myon.else {
@@ -145,7 +141,7 @@ myon.func spin(sp: Spinner) ret void {
     }
 
     myon.if myon.is_tty() then {
-        myon.write(cr() + prefix + frame + clear_pad())
+        myon.write(cr() + clear_to_eol() + prefix + frame)
         myon.flush()
     }
 }
@@ -153,7 +149,7 @@ myon.func spin(sp: Spinner) ret void {
 // スピナーを終了し、最終メッセージを1行で確定する。
 myon.func spinner_finish(sp: Spinner, message: str) ret void {
     myon.if myon.is_tty() then {
-        myon.write(clear_pad())
+        myon.write(cr() + clear_to_eol())
     }
     myon.println(message)
 }
