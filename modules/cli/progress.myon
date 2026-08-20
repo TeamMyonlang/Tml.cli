@@ -1,0 +1,142 @@
+// cli.progress -- ターミナル向けプログレスバー
+//
+// myon.write("\r...") + myon.flush() で同一行を上書きし続ける方式。
+// 非TTY（パイプ・リダイレクト）の場合は \r 上書きをせず、
+// 変化があったときだけ改行付きで出力する（ログが荒れないように）。
+//
+// 使い方:
+//   module cli.progress as progress
+//   bar = progress.new(100)
+//   myon.for i myon.in range(0, 101) {
+//       progress.update(bar, i)
+//   }
+//   progress.finish(bar)
+
+module myon.stdio
+
+myon.struct Bar {
+    total: int
+    width: int
+    label: str
+    last_pct: int
+    started: bool
+}
+
+// total: 100%とみなす目標値。width: バーの表示幅（文字数）。
+myon.func new(total: int) ret Bar {
+    t = total
+    myon.if t <= 0 then { t = 1 }
+    ret Bar(total=t, width=30, label="", last_pct=-1, started=false)
+}
+
+// ラベル（バーの前に出す短い説明）付きで作る。
+myon.func new_labeled(total: int, label: str) ret Bar {
+    b = new(total)
+    b.label = label
+    ret b
+}
+
+myon.func percent_of(bar: Bar, current: int) ret int {
+    c = current
+    myon.if c < 0 then { c = 0 }
+    myon.if c > bar.total then { c = bar.total }
+    pct = (c * 100) / bar.total
+    ret pct
+}
+
+myon.func render_line(bar: Bar, current: int) ret str {
+    pct = percent_of(bar, current)
+    filled = (bar.width * pct) / 100
+    myon.if filled > bar.width then { filled = bar.width }
+    empty = bar.width - filled
+
+    fill_str, ferr = myon.string.repeat("#", filled)
+    empty_str, eerr = myon.string.repeat("-", empty)
+
+    prefix = ""
+    myon.if myon.string.length_chars(bar.label) > 0 then {
+        prefix = bar.label + " "
+    }
+
+    line = prefix + "[" + fill_str + empty_str + "] " + str(pct) + "% (" + str(current) + "/" + str(bar.total) + ")"
+    ret line
+}
+
+// current 時点の状態を1行で描画する。TTYなら \r で上書き、
+// 非TTYなら変化した割合(%)のときだけ改行で出力する。
+myon.func update(bar: Bar, current: int) ret void {
+    pct = percent_of(bar, current)
+    myon.if myon.is_tty() then {
+        line = render_line(bar, current)
+        myon.write("\r" + line)
+        myon.flush()
+        bar.last_pct = pct
+        bar.started = true
+    } myon.else {
+        myon.if pct != bar.last_pct then {
+            line = render_line(bar, current)
+            myon.println(line)
+            bar.last_pct = pct
+        }
+    }
+}
+
+// バーを完了させ、改行して行を確定する。
+myon.func finish(bar: Bar) ret void {
+    myon.if myon.is_tty() then {
+        line = render_line(bar, bar.total)
+        myon.write("\r" + line)
+        myon.println("")
+        myon.flush()
+    } myon.else {
+        myon.if bar.last_pct != 100 then {
+            line = render_line(bar, bar.total)
+            myon.println(line)
+        }
+    }
+}
+
+// -- スピナー（不定長タスク向け） --
+
+myon.struct Spinner {
+    frames: myon.array(str)
+    frame_index: int
+    label: str
+}
+
+myon.func new_spinner(label: str) ret Spinner {
+    frames = myon.array(str)
+    frames.push("|")
+    frames.push("/")
+    frames.push("-")
+    frames.push("\\")
+    ret Spinner(frames=frames, frame_index=0, label=label)
+}
+
+// 呼ぶたびに次のフレームへ進めて1行を上書き描画する。
+// ループ内で一定間隔ごとに呼ぶ想定（myon.time.sleep等と組み合わせる）。
+myon.func spin(sp: Spinner) ret void {
+    frame = sp.frames[sp.frame_index]
+    sp.frame_index = (sp.frame_index + 1) 
+    myon.if sp.frame_index >= sp.frames.length() then {
+        sp.frame_index = 0
+    }
+
+    prefix = ""
+    myon.if myon.string.length_chars(sp.label) > 0 then {
+        prefix = sp.label + " "
+    }
+
+    myon.if myon.is_tty() then {
+        myon.write("\r" + prefix + frame)
+        myon.flush()
+    }
+}
+
+// スピナーを終了し、最終メッセージを1行で確定する。
+myon.func spinner_finish(sp: Spinner, message: str) ret void {
+    myon.if myon.is_tty() then {
+        myon.write("\r")
+    }
+    myon.println(message)
+}

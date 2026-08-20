@@ -1,0 +1,3 @@
+# Myon: ローカル検証用に生成される取得物は追跡しない
+/.myon/packages/
+/.myon/.staging/

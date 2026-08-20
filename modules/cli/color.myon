@@ -1,0 +1,99 @@
+// cli.color -- ANSI カラー出力ヘルパー
+//
+// 端末がTTYでない場合（パイプ・リダイレクト先）はANSIエスケープを
+// 抑制したい場面が多いので、各関数は「常に色を付ける」版を提供し、
+// 呼び出し側で myon.is_tty() を見て使い分ける想定にする。
+// （strip系関数で後から無効化することもできる）
+
+module myon.stdio
+
+myon.func esc() ret str { ret str(char(27)) + "[" }
+myon.func reset_code() ret str { ret esc() + "0m" }
+
+myon.func wrap(code: str, s: str) ret str {
+    ret code + s + reset_code()
+}
+
+// -- 前景色 --
+myon.func black(s: str) ret str { ret wrap(esc() + "30m", s) }
+myon.func red(s: str) ret str { ret wrap(esc() + "31m", s) }
+myon.func green(s: str) ret str { ret wrap(esc() + "32m", s) }
+myon.func yellow(s: str) ret str { ret wrap(esc() + "33m", s) }
+myon.func blue(s: str) ret str { ret wrap(esc() + "34m", s) }
+myon.func magenta(s: str) ret str { ret wrap(esc() + "35m", s) }
+myon.func cyan(s: str) ret str { ret wrap(esc() + "36m", s) }
+myon.func white(s: str) ret str { ret wrap(esc() + "37m", s) }
+
+// -- 明るい前景色 --
+myon.func bright_black(s: str) ret str { ret wrap(esc() + "90m", s) }
+myon.func bright_red(s: str) ret str { ret wrap(esc() + "91m", s) }
+myon.func bright_green(s: str) ret str { ret wrap(esc() + "92m", s) }
+myon.func bright_yellow(s: str) ret str { ret wrap(esc() + "93m", s) }
+myon.func bright_blue(s: str) ret str { ret wrap(esc() + "94m", s) }
+myon.func bright_magenta(s: str) ret str { ret wrap(esc() + "95m", s) }
+myon.func bright_cyan(s: str) ret str { ret wrap(esc() + "96m", s) }
+myon.func bright_white(s: str) ret str { ret wrap(esc() + "97m", s) }
+
+// -- 背景色 --
+myon.func bg_black(s: str) ret str { ret wrap(esc() + "40m", s) }
+myon.func bg_red(s: str) ret str { ret wrap(esc() + "41m", s) }
+myon.func bg_green(s: str) ret str { ret wrap(esc() + "42m", s) }
+myon.func bg_yellow(s: str) ret str { ret wrap(esc() + "43m", s) }
+myon.func bg_blue(s: str) ret str { ret wrap(esc() + "44m", s) }
+myon.func bg_magenta(s: str) ret str { ret wrap(esc() + "45m", s) }
+myon.func bg_cyan(s: str) ret str { ret wrap(esc() + "46m", s) }
+myon.func bg_white(s: str) ret str { ret wrap(esc() + "47m", s) }
+
+// -- 装飾 --
+myon.func bold(s: str) ret str { ret wrap(esc() + "1m", s) }
+myon.func dim(s: str) ret str { ret wrap(esc() + "2m", s) }
+myon.func italic(s: str) ret str { ret wrap(esc() + "3m", s) }
+myon.func underline(s: str) ret str { ret wrap(esc() + "4m", s) }
+
+// -- セマンティックヘルパー（よく使う組み合わせ） --
+myon.func success(s: str) ret str { ret green(s) }
+myon.func error_text(s: str) ret str { ret red(s) }
+myon.func warn(s: str) ret str { ret yellow(s) }
+myon.func info(s: str) ret str { ret cyan(s) }
+
+// 8bit（256色）前景色。n は 0..255。範囲外は clamp する。
+myon.func fg256(n: int, s: str) ret str {
+    v = n
+    myon.if v < 0 then { v = 0 }
+    myon.if v > 255 then { v = 255 }
+    ret wrap(esc() + "38;5;" + str(v) + "m", s)
+}
+
+// 8bit（256色）背景色。n は 0..255。範囲外は clamp する。
+myon.func bg256(n: int, s: str) ret str {
+    v = n
+    myon.if v < 0 then { v = 0 }
+    myon.if v > 255 then { v = 255 }
+    ret wrap(esc() + "48;5;" + str(v) + "m", s)
+}
+
+// 端末が非TTYのとき等に、色付き文字列からANSIエスケープを取り除く。
+// パイプ出力・ログファイル書き込み前のサニタイズ用。
+myon.func strip(s: str) ret str {
+    out = ""
+    i = 0
+    n = myon.string.length_chars(s)
+    esc_char = char(27)
+    myon.while i < n {
+        c, cerr = myon.string.substring(s, i, 1)
+        myon.if c == str(esc_char) then {
+            // "\x1b[...m" の "m" までスキップする
+            j = i + 1
+            myon.while j < n {
+                cj, cjerr = myon.string.substring(s, j, 1)
+                j = j + 1
+                myon.if cj == "m" then { myon.break }
+            }
+            i = j
+        } myon.else {
+            out = out + c
+            i = i + 1
+        }
+    }
+    ret out
+}

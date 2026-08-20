@@ -1,0 +1,139 @@
+// cli.args -- コマンドライン引数パーサー
+//
+// myon.argv() が返す myon.array(str) を解析し、
+//   --flag            -> フラグ（値なし bool true）
+//   --key=value        -> key=value 形式
+//   --key value         -> 次トークンを値として消費（次が別の --opt なら消費しない）
+//   -f                    -> 短縮フラグ（値なし bool true）
+//   それ以外              -> positional 引数
+// に振り分ける。
+//
+// 使い方:
+//   module cli.args as args
+//   parsed = args.parse(myon.argv())
+//   myon.if args.has(parsed, "verbose") then { ... }
+//   name = args.get_str(parsed, "name", "default")
+
+module myon.stdio
+
+myon.struct ParsedArgs {
+    flag_keys: myon.array(str)
+    flag_values: myon.array(str)
+    positional: myon.array(str)
+}
+
+myon.func is_long_opt(s: str) ret bool {
+    ret myon.string.starts_with(s, "--")
+}
+
+myon.func is_short_opt(s: str) ret bool {
+    myon.if myon.string.length_chars(s) < 2 then { ret false }
+    prefix, perr = myon.string.substring(s, 0, 1)
+    second, serr = myon.string.substring(s, 1, 1)
+    is_dash_second = second == "-"
+    ret prefix == "-" myon.and myon.not is_dash_second
+}
+
+myon.func is_opt(s: str) ret bool {
+    ret is_long_opt(s) myon.or is_short_opt(s)
+}
+
+// argv を解析して ParsedArgs を返す。
+myon.func parse(argv: myon.array(str)) ret ParsedArgs {
+    keys = myon.array(str)
+    values = myon.array(str)
+    positional = myon.array(str)
+
+    n = argv.length()
+    i = 0
+    myon.while i < n {
+        tok = argv[i]
+
+        myon.if is_long_opt(tok) then {
+            body, berr = myon.string.substring(tok, 2, myon.string.length_chars(tok) - 2)
+            eq_pos = myon.string.index_of(body, "=")
+            myon.if eq_pos >= 0 then {
+                // --key=value
+                k, kerr = myon.string.substring(body, 0, eq_pos)
+                v, verr = myon.string.substring(body, eq_pos + 1, myon.string.length_chars(body) - eq_pos - 1)
+                keys.push(k)
+                values.push(v)
+                i = i + 1
+            } myon.else {
+                // --key [value] または --flag
+                has_next = (i + 1) < n
+                myon.if has_next then {
+                    nxt = argv[i + 1]
+                    myon.if is_opt(nxt) then {
+                        keys.push(body)
+                        values.push("true")
+                        i = i + 1
+                    } myon.else {
+                        keys.push(body)
+                        values.push(nxt)
+                        i = i + 2
+                    }
+                } myon.else {
+                    keys.push(body)
+                    values.push("true")
+                    i = i + 1
+                }
+            }
+        } myon.elif is_short_opt(tok) then {
+            body, berr = myon.string.substring(tok, 1, myon.string.length_chars(tok) - 1)
+            keys.push(body)
+            values.push("true")
+            i = i + 1
+        } myon.else {
+            positional.push(tok)
+            i = i + 1
+        }
+    }
+
+    ret ParsedArgs(flag_keys=keys, flag_values=values, positional=positional)
+}
+
+// key が存在するか（値の有無は問わない）。
+myon.func has(parsed: ParsedArgs, key: str) ret bool {
+    ret parsed.flag_keys.contains(key)
+}
+
+// key に対応する生の文字列値を返す。無ければ default_value を返す。
+myon.func get_str(parsed: ParsedArgs, key: str, default_value: str) ret str {
+    idx = parsed.flag_keys.index_of(key)
+    myon.if idx < 0 then { ret default_value }
+    ret parsed.flag_values[idx]
+}
+
+// key に対応する値を int としてパースする。無い／変換失敗なら default_value。
+myon.func get_int(parsed: ParsedArgs, key: str, default_value: int) ret int {
+    idx = parsed.flag_keys.index_of(key)
+    myon.if idx < 0 then { ret default_value }
+    v, verr = myon.string.to_int(parsed.flag_values[idx])
+    myon.if verr != myon.nil then { ret default_value }
+    ret v
+}
+
+// key に対応する値を bool として解釈する。
+// "true" / "1" / "yes" を true とみなし、それ以外は false。
+myon.func get_bool(parsed: ParsedArgs, key: str) ret bool {
+    idx = parsed.flag_keys.index_of(key)
+    myon.if idx < 0 then { ret false }
+    v = myon.string.lower(parsed.flag_values[idx])
+    myon.if v == "true" then { ret true }
+    myon.if v == "1" then { ret true }
+    myon.if v == "yes" then { ret true }
+    ret false
+}
+
+// positional（オプションでない）引数を順番どおりの配列で返す。
+myon.func positionals(parsed: ParsedArgs) ret myon.array(str) {
+    ret parsed.positional
+}
+
+// index 番目の positional 引数を返す。範囲外なら default_value。
+myon.func positional_at(parsed: ParsedArgs, index: int, default_value: str) ret str {
+    myon.if index < 0 then { ret default_value }
+    myon.if index >= parsed.positional.length() then { ret default_value }
+    ret parsed.positional[index]
+}
